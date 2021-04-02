@@ -70,5 +70,12 @@ export const WETH = {
     18,
     'WBNB',
     'Wrapped BNB'
+  ),
+  [ChainId.GANACHETESTNET]: new Token(
+    ChainId.GANACHETESTNET,
+    process.env ? process.env.REACT_APP_WETH_ADDRESS as string : "",
+    18,
+    'WBNB',
+    'Wrapped BNB'
   )
 }

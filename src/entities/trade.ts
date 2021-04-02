@@ -247,23 +247,23 @@ export class Trade {
    * @param currencyOut the desired currency out
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
+   * @param factoryAddress the address of the factory contract
+   * @param initCodeHash the pair initCodeHash
    * @param currentPairs used in recursion; the current list of pairs
    * @param originalAmountIn used in recursion; the original value of the currencyAmountIn parameter
    * @param bestTrades used in recursion; the current list of best trades
-   * @param factoryAddress the address of the factory contract
-   * @param initCodeHash the pair initCodeHash
    */
   public static bestTradeExactIn(
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
+    factoryAddress: string,
+    initCodeHash: string,
     // used in recursion.
     currentPairs: Pair[] = [],
     originalAmountIn: CurrencyAmount = currencyAmountIn,
-    bestTrades: Trade[] = [],
-    factoryAddress: string,
-    initCodeHash: string
+    bestTrades: Trade[] = []
   ): Trade[] {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
@@ -320,11 +320,11 @@ export class Trade {
             maxNumResults,
             maxHops: maxHops - 1
           },
+          factoryAddress, 
+          initCodeHash,
           [...currentPairs, pair],
           originalAmountIn,
-          bestTrades,
-          factoryAddress, 
-          initCodeHash
+          bestTrades
         )
       }
     }
@@ -343,23 +343,23 @@ export class Trade {
    * @param currencyAmountOut the exact amount of currency out
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
+   * @param factoryAddress the address of the factory contract
+   * @param initCodeHash the pair initCodeHash
    * @param currentPairs used in recursion; the current list of pairs
    * @param originalAmountOut used in recursion; the original value of the currencyAmountOut parameter
    * @param bestTrades used in recursion; the current list of best trades
-   * @param factoryAddress the address of the factory contract
-   * @param initCodeHash the pair initCodeHash
    */
   public static bestTradeExactOut(
     pairs: Pair[],
     currencyIn: Currency,
     currencyAmountOut: CurrencyAmount,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
+    factoryAddress: string,
+    initCodeHash: string,
     // used in recursion.
     currentPairs: Pair[] = [],
     originalAmountOut: CurrencyAmount = currencyAmountOut,
-    bestTrades: Trade[] = [],
-    factoryAddress: string,
-    initCodeHash: string
+    bestTrades: Trade[] = []
   ): Trade[] {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
@@ -416,11 +416,11 @@ export class Trade {
             maxNumResults,
             maxHops: maxHops - 1
           },
+          factoryAddress, 
+          initCodeHash,
           [pair, ...currentPairs],
           originalAmountOut,
-          bestTrades,
-          factoryAddress, 
-          initCodeHash
+          bestTrades
         )
       }
     }
