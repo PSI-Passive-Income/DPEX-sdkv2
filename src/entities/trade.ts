@@ -140,8 +140,8 @@ export class Trade {
    * @param factoryAddress the address of the factory contract
    * @param initCodeHash the pair initCodeHash
    */
-  public static exactIn(route: Route, amountIn: CurrencyAmount, factoryAddress: string, initCodeHash: string): Trade {
-    return new Trade(route, amountIn, TradeType.EXACT_INPUT, factoryAddress, initCodeHash)
+  public static exactIn(route: Route, amountIn: CurrencyAmount): Trade {
+    return new Trade(route, amountIn, TradeType.EXACT_INPUT)
   }
 
   /**
@@ -151,11 +151,11 @@ export class Trade {
    * @param factoryAddress the address of the factory contract
    * @param initCodeHash the pair initCodeHash
    */
-  public static exactOut(route: Route, amountOut: CurrencyAmount, factoryAddress: string, initCodeHash: string): Trade {
-    return new Trade(route, amountOut, TradeType.EXACT_OUTPUT, factoryAddress, initCodeHash)
+  public static exactOut(route: Route, amountOut: CurrencyAmount): Trade {
+    return new Trade(route, amountOut, TradeType.EXACT_OUTPUT)
   }
 
-  public constructor(route: Route, amount: CurrencyAmount, tradeType: TradeType, factoryAddress: string, initCodeHash: string) {
+  public constructor(route: Route, amount: CurrencyAmount, tradeType: TradeType) {
     const amounts: TokenAmount[] = new Array(route.path.length)
     const nextPairs: Pair[] = new Array(route.pairs.length)
     if (tradeType === TradeType.EXACT_INPUT) {
@@ -163,7 +163,7 @@ export class Trade {
       amounts[0] = wrappedAmount(amount, route.chainId)
       for (let i = 0; i < route.path.length - 1; i++) {
         const pair = route.pairs[i]
-        const [outputAmount, nextPair] = pair.getOutputAmount(amounts[i], factoryAddress, initCodeHash)
+        const [outputAmount, nextPair] = pair.getOutputAmount(amounts[i])
         amounts[i + 1] = outputAmount
         nextPairs[i] = nextPair
       }
@@ -172,7 +172,7 @@ export class Trade {
       amounts[amounts.length - 1] = wrappedAmount(amount, route.chainId)
       for (let i = route.path.length - 1; i > 0; i--) {
         const pair = route.pairs[i - 1]
-        const [inputAmount, nextPair] = pair.getInputAmount(amounts[i], factoryAddress, initCodeHash)
+        const [inputAmount, nextPair] = pair.getInputAmount(amounts[i])
         amounts[i - 1] = inputAmount
         nextPairs[i - 1] = nextPair
       }
@@ -247,8 +247,6 @@ export class Trade {
    * @param currencyOut the desired currency out
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
-   * @param factoryAddress the address of the factory contract
-   * @param initCodeHash the pair initCodeHash
    * @param currentPairs used in recursion; the current list of pairs
    * @param originalAmountIn used in recursion; the original value of the currencyAmountIn parameter
    * @param bestTrades used in recursion; the current list of best trades
@@ -258,8 +256,6 @@ export class Trade {
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
-    factoryAddress: string,
-    initCodeHash: string,
     // used in recursion.
     currentPairs: Pair[] = [],
     originalAmountIn: CurrencyAmount = currencyAmountIn,
@@ -286,7 +282,7 @@ export class Trade {
 
       let amountOut: TokenAmount
       try {
-        ;[amountOut] = pair.getOutputAmount(amountIn, factoryAddress, initCodeHash)
+        ;[amountOut] = pair.getOutputAmount(amountIn)
       } catch (error) {
         // input too low
         if (error.isInsufficientInputAmountError) {
@@ -301,9 +297,7 @@ export class Trade {
           new Trade(
             new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
             originalAmountIn,
-            TradeType.EXACT_INPUT,
-            factoryAddress, 
-            initCodeHash
+            TradeType.EXACT_INPUT
           ),
           maxNumResults,
           tradeComparator
@@ -320,8 +314,6 @@ export class Trade {
             maxNumResults,
             maxHops: maxHops - 1
           },
-          factoryAddress, 
-          initCodeHash,
           [...currentPairs, pair],
           originalAmountIn,
           bestTrades
@@ -343,8 +335,6 @@ export class Trade {
    * @param currencyAmountOut the exact amount of currency out
    * @param maxNumResults maximum number of results to return
    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through a single pair
-   * @param factoryAddress the address of the factory contract
-   * @param initCodeHash the pair initCodeHash
    * @param currentPairs used in recursion; the current list of pairs
    * @param originalAmountOut used in recursion; the original value of the currencyAmountOut parameter
    * @param bestTrades used in recursion; the current list of best trades
@@ -354,8 +344,6 @@ export class Trade {
     currencyIn: Currency,
     currencyAmountOut: CurrencyAmount,
     { maxNumResults = 3, maxHops = 3 }: BestTradeOptions = {},
-    factoryAddress: string,
-    initCodeHash: string,
     // used in recursion.
     currentPairs: Pair[] = [],
     originalAmountOut: CurrencyAmount = currencyAmountOut,
@@ -382,7 +370,7 @@ export class Trade {
 
       let amountIn: TokenAmount
       try {
-        ;[amountIn] = pair.getInputAmount(amountOut, factoryAddress, initCodeHash)
+        ;[amountIn] = pair.getInputAmount(amountOut)
       } catch (error) {
         // not enough liquidity in this pair
         if (error.isInsufficientReservesError) {
@@ -398,8 +386,6 @@ export class Trade {
             new Route([pair, ...currentPairs], currencyIn, originalAmountOut.currency),
             originalAmountOut,
             TradeType.EXACT_OUTPUT,
-            factoryAddress, 
-            initCodeHash
           ),
           maxNumResults,
           tradeComparator
@@ -416,8 +402,6 @@ export class Trade {
             maxNumResults,
             maxHops: maxHops - 1
           },
-          factoryAddress, 
-          initCodeHash,
           [pair, ...currentPairs],
           originalAmountOut,
           bestTrades

@@ -19,20 +19,23 @@ import { sqrt, parseBigintIsh } from '../utils'
 import { InsufficientReservesError, InsufficientInputAmountError } from '../errors'
 import { Token } from './token'
 
-let PAIR_ADDRESS_CACHE: { [token0Address: string]: { [token1Address: string]: string } } = {}
+let PAIR_ADDRESS_CACHE: { [factory: string]: { [token0Address: string]: { [token1Address: string]: string } } } = {}
 
 export class Pair {
   public readonly liquidityToken: Token
+  public readonly factory: string
+  public readonly initCodeHash: string
   private readonly tokenAmounts: [TokenAmount, TokenAmount]
 
   public static getAddress(factoryAddress: string, initCodeHash: string, tokenA: Token, tokenB: Token): string {
     const tokens = tokenA.sortsBefore(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA] // does safety checks
 
-    if (PAIR_ADDRESS_CACHE?.[tokens[0].address]?.[tokens[1].address] === undefined) {
-      PAIR_ADDRESS_CACHE = {
-        ...PAIR_ADDRESS_CACHE,
+    if (!PAIR_ADDRESS_CACHE?.[factoryAddress]) PAIR_ADDRESS_CACHE[factoryAddress] = {};
+    if (PAIR_ADDRESS_CACHE?.[factoryAddress]?.[tokens[0].address]?.[tokens[1].address] === undefined) {
+      PAIR_ADDRESS_CACHE[factoryAddress] = {
+        ...PAIR_ADDRESS_CACHE[factoryAddress],
         [tokens[0].address]: {
-          ...PAIR_ADDRESS_CACHE?.[tokens[0].address],
+          ...PAIR_ADDRESS_CACHE[factoryAddress]?.[tokens[0].address],
           [tokens[1].address]: getCreate2Address(
             factoryAddress,
             keccak256(['bytes'], [pack(['address', 'address'], [tokens[0].address, tokens[1].address])]),
@@ -42,7 +45,7 @@ export class Pair {
       }
     }
 
-    return PAIR_ADDRESS_CACHE[tokens[0].address][tokens[1].address]
+    return PAIR_ADDRESS_CACHE[factoryAddress][tokens[0].address][tokens[1].address]
   }
 
   public constructor(tokenAmountA: TokenAmount, tokenAmountB: TokenAmount, factoryAddress: string, initCodeHash: string) {
@@ -53,9 +56,11 @@ export class Pair {
       tokenAmounts[0].token.chainId,
       Pair.getAddress(factoryAddress, initCodeHash, tokenAmounts[0].token, tokenAmounts[1].token),
       18,
-      'UNI-V2',
-      'Uniswap V2'
+      'DPEX-LP', // used for permit
+      'Decentralized Passive Exchange Pair' // used for permit
     )
+    this.factory = factoryAddress
+    this.initCodeHash = initCodeHash
     this.tokenAmounts = tokenAmounts as [TokenAmount, TokenAmount]
   }
 
@@ -118,7 +123,7 @@ export class Pair {
     return token.equals(this.token0) ? this.reserve0 : this.reserve1
   }
 
-  public getOutputAmount(inputAmount: TokenAmount, factoryAddress: string, initCodeHash: string): [TokenAmount, Pair] {
+  public getOutputAmount(inputAmount: TokenAmount): [TokenAmount, Pair] {
     invariant(this.involvesToken(inputAmount.token), 'TOKEN')
     if (JSBI.equal(this.reserve0.raw, ZERO) || JSBI.equal(this.reserve1.raw, ZERO)) {
       throw new InsufficientReservesError()
@@ -135,10 +140,10 @@ export class Pair {
     if (JSBI.equal(outputAmount.raw, ZERO)) {
       throw new InsufficientInputAmountError()
     }
-    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), factoryAddress, initCodeHash)]
+    return [outputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.factory, this.initCodeHash)]
   }
 
-  public getInputAmount(outputAmount: TokenAmount, factoryAddress: string, initCodeHash: string): [TokenAmount, Pair] {
+  public getInputAmount(outputAmount: TokenAmount): [TokenAmount, Pair] {
     invariant(this.involvesToken(outputAmount.token), 'TOKEN')
     if (
       JSBI.equal(this.reserve0.raw, ZERO) ||
@@ -156,7 +161,7 @@ export class Pair {
       outputAmount.token.equals(this.token0) ? this.token1 : this.token0,
       JSBI.add(JSBI.divide(numerator, denominator), ONE)
     )
-    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), factoryAddress, initCodeHash)]
+    return [inputAmount, new Pair(inputReserve.add(inputAmount), outputReserve.subtract(outputAmount), this.factory, this.initCodeHash)]
   }
 
   public getLiquidityMinted(
