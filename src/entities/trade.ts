@@ -274,50 +274,60 @@ export class Trade {
 
     const amountIn = wrappedAmount(currencyAmountIn, chainId)
     const tokenOut = wrappedCurrency(currencyOut, chainId)
-    for (let i = 0; i < pairs.length; i++) {
-      const pair = pairs[i]
-      // pair irrelevant
-      if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
-      let amountOut: TokenAmount
-      try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
-      } catch (error) {
-        // input too low
-        if (error.isInsufficientInputAmountError) {
-          continue
+    const allFactoryPairs = currentPairs.length === 0 
+      ? Object.values(pairs.reduce((factoryPairs: { [key: string]: Pair[] }, current: Pair) => {
+        factoryPairs[current.factory] = [...factoryPairs[current.factory] || [], current];
+        return factoryPairs;
+      }, {}))
+      : [currentPairs];
+
+    for (const factoryPairs of allFactoryPairs) {
+      for (let i = 0; i < factoryPairs.length; i++) {
+        const pair = factoryPairs[i]
+        // pair irrelevant
+        if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
+        if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+
+        let amountOut: TokenAmount
+        try {
+          ;[amountOut] = pair.getOutputAmount(amountIn)
+        } catch (error) {
+          // input too low
+          if (error.isInsufficientInputAmountError) {
+            continue
+          }
+          throw error
         }
-        throw error
-      }
-      // we have arrived at the output token, so this is the final trade of one of the paths
-      if (amountOut.token.equals(tokenOut)) {
-        sortedInsert(
-          bestTrades,
-          new Trade(
-            new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
-            originalAmountIn,
-            TradeType.EXACT_INPUT
-          ),
-          maxNumResults,
-          tradeComparator
-        )
-      } else if (maxHops > 1 && pairs.length > 1) {
-        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
-
-        // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
-        Trade.bestTradeExactIn(
-          pairsExcludingThisPair,
-          amountOut,
-          currencyOut,
-          {
+        // we have arrived at the output token, so this is the final trade of one of the paths
+        if (amountOut.token.equals(tokenOut)) {
+          sortedInsert(
+            bestTrades,
+            new Trade(
+              new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
+              originalAmountIn,
+              TradeType.EXACT_INPUT
+            ),
             maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [...currentPairs, pair],
-          originalAmountIn,
-          bestTrades
-        )
+            tradeComparator
+          )
+        } else if (maxHops > 1 && factoryPairs.length > 1) {
+          const pairsExcludingThisPair = factoryPairs.slice(0, i).concat(factoryPairs.slice(i + 1, factoryPairs.length))
+
+          // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
+          Trade.bestTradeExactIn(
+            pairsExcludingThisPair,
+            amountOut,
+            currencyOut,
+            {
+              maxNumResults,
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalAmountIn,
+            bestTrades
+          )
+        }
       }
     }
 
@@ -362,50 +372,60 @@ export class Trade {
 
     const amountOut = wrappedAmount(currencyAmountOut, chainId)
     const tokenIn = wrappedCurrency(currencyIn, chainId)
-    for (let i = 0; i < pairs.length; i++) {
-      const pair = pairs[i]
-      // pair irrelevant
-      if (!pair.token0.equals(amountOut.token) && !pair.token1.equals(amountOut.token)) continue
-      if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
-      let amountIn: TokenAmount
-      try {
-        ;[amountIn] = pair.getInputAmount(amountOut)
-      } catch (error) {
-        // not enough liquidity in this pair
-        if (error.isInsufficientReservesError) {
-          continue
+    const allFactoryPairs = currentPairs.length === 0 
+      ? Object.values(pairs.reduce((factoryPairs: { [key: string]: Pair[] }, current: Pair) => {
+        factoryPairs[current.factory] = [...factoryPairs[current.factory] || [], current];
+        return factoryPairs;
+      }, {}))
+      : [currentPairs];
+
+    for (const factoryPairs of allFactoryPairs) {
+      for (let i = 0; i < factoryPairs.length; i++) {
+        const pair = factoryPairs[i]
+        // pair irrelevant
+        if (!pair.token0.equals(amountOut.token) && !pair.token1.equals(amountOut.token)) continue
+        if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
+
+        let amountIn: TokenAmount
+        try {
+          ;[amountIn] = pair.getInputAmount(amountOut)
+        } catch (error) {
+          // not enough liquidity in this pair
+          if (error.isInsufficientReservesError) {
+            continue
+          }
+          throw error
         }
-        throw error
-      }
-      // we have arrived at the input token, so this is the first trade of one of the paths
-      if (amountIn.token.equals(tokenIn)) {
-        sortedInsert(
-          bestTrades,
-          new Trade(
-            new Route([pair, ...currentPairs], currencyIn, originalAmountOut.currency),
-            originalAmountOut,
-            TradeType.EXACT_OUTPUT,
-          ),
-          maxNumResults,
-          tradeComparator
-        )
-      } else if (maxHops > 1 && pairs.length > 1) {
-        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
-
-        // otherwise, consider all the other paths that arrive at this token as long as we have not exceeded maxHops
-        Trade.bestTradeExactOut(
-          pairsExcludingThisPair,
-          currencyIn,
-          amountIn,
-          {
+        // we have arrived at the input token, so this is the first trade of one of the paths
+        if (amountIn.token.equals(tokenIn)) {
+          sortedInsert(
+            bestTrades,
+            new Trade(
+              new Route([pair, ...currentPairs], currencyIn, originalAmountOut.currency),
+              originalAmountOut,
+              TradeType.EXACT_OUTPUT,
+            ),
             maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [pair, ...currentPairs],
-          originalAmountOut,
-          bestTrades
-        )
+            tradeComparator
+          )
+        } else if (maxHops > 1 && factoryPairs.length > 1) {
+          const pairsExcludingThisPair = factoryPairs.slice(0, i).concat(factoryPairs.slice(i + 1, factoryPairs.length))
+
+          // otherwise, consider all the other paths that arrive at this token as long as we have not exceeded maxHops
+          Trade.bestTradeExactOut(
+            pairsExcludingThisPair,
+            currencyIn,
+            amountIn,
+            {
+              maxNumResults,
+              maxHops: maxHops - 1
+            },
+            [pair, ...currentPairs],
+            originalAmountOut,
+            bestTrades
+          )
+        }
       }
     }
 
