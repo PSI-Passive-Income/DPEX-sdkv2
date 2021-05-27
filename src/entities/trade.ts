@@ -251,7 +251,7 @@ export class Trade {
    * @param originalAmountIn used in recursion; the original value of the currencyAmountIn parameter
    * @param bestTrades used in recursion; the current list of best trades
    */
-  public static bestTradeExactIn(
+  public static async bestTradeExactIn(
     pairs: Pair[],
     currencyAmountIn: CurrencyAmount,
     currencyOut: Currency,
@@ -260,7 +260,7 @@ export class Trade {
     currentPairs: Pair[] = [],
     originalAmountIn: CurrencyAmount = currencyAmountIn,
     bestTrades: Trade[] = []
-  ): Trade[] {
+  ): Promise<Trade[]> {
     invariant(pairs.length > 0, 'PAIRS')
     invariant(maxHops > 0, 'MAX_HOPS')
     invariant(originalAmountIn === currencyAmountIn || currentPairs.length > 0, 'INVALID_RECURSION')
@@ -271,7 +271,8 @@ export class Trade {
         ? currencyOut.chainId
         : undefined
     invariant(chainId !== undefined, 'CHAIN_ID')
-
+    
+    const getBestTradesFunc: Promise<void>[] = [];
     const amountIn = wrappedAmount(currencyAmountIn, chainId)
     const tokenOut = wrappedCurrency(currencyOut, chainId)
     for (let i = 0; i < pairs.length; i++) {
@@ -280,47 +281,55 @@ export class Trade {
       if (!pair.token0.equals(amountIn.token) && !pair.token1.equals(amountIn.token)) continue
       if (pair.reserve0.equalTo(ZERO) || pair.reserve1.equalTo(ZERO)) continue
 
-      let amountOut: TokenAmount
-      try {
-        ;[amountOut] = pair.getOutputAmount(amountIn)
-      } catch (error) {
-        // input too low
-        if (error.isInsufficientInputAmountError) {
-          continue
+      getBestTradesFunc.push((async () => {
+        let amountOut: TokenAmount
+        try {
+          ;[amountOut] = pair.getOutputAmount(amountIn)
+        } catch (error) {
+          // input too low
+          if (error.isInsufficientInputAmountError) {
+            return
+          }
+          throw error
         }
-        throw error
-      }
-      // we have arrived at the output token, so this is the final trade of one of the paths
-      if (amountOut.token.equals(tokenOut)) {
-        sortedInsert(
-          bestTrades,
-          new Trade(
-            new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
-            originalAmountIn,
-            TradeType.EXACT_INPUT
-          ),
-          maxNumResults,
-          tradeComparator
-        )
-      } else if (maxHops > 1 && pairs.length > 1) {
-        const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
-
-        // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
-        Trade.bestTradeExactIn(
-          pairsExcludingThisPair,
-          amountOut,
-          currencyOut,
-          {
+        // we have arrived at the output token, so this is the final trade of one of the paths
+        if (amountOut.token.equals(tokenOut)) {
+          sortedInsert(
+            bestTrades,
+            new Trade(
+              new Route([...currentPairs, pair], originalAmountIn.currency, currencyOut),
+              originalAmountIn,
+              TradeType.EXACT_INPUT
+            ),
             maxNumResults,
-            maxHops: maxHops - 1
-          },
-          [...currentPairs, pair],
-          originalAmountIn,
-          bestTrades
-        )
-      }
+            tradeComparator
+          )
+        } else if (maxHops > 1 && pairs.length > 1) {
+          const pairsExcludingThisPair = pairs.slice(0, i).concat(pairs.slice(i + 1, pairs.length))
+
+          // otherwise, consider all the other paths that lead from this token as long as we have not exceeded maxHops
+          await Trade.bestTradeExactIn(
+            pairsExcludingThisPair,
+            amountOut,
+            currencyOut,
+            {
+              maxNumResults,
+              maxHops: maxHops - 1
+            },
+            [...currentPairs, pair],
+            originalAmountIn,
+            bestTrades
+          )
+        }
+      })())
     }
 
+    console.log(getBestTradesFunc);
+    if (getBestTradesFunc.length > 0) {
+      await Promise.all(getBestTradesFunc)
+    }
+
+    console.log(bestTrades)
     return bestTrades
   }
 
@@ -411,4 +420,32 @@ export class Trade {
 
     return bestTrades
   }
+
+  // private static parallelSync(arrOfSyncFunctions: (() => void)[]): Promise<void[]> {
+  //   return Promise.all(arrOfSyncFunctions.map((syncFunc) => {
+  //     return new Promise<void>((resolve) => {
+  //       syncFunc()
+  //       resolve()
+  //     })
+  //   }))
+  //   // return new Promise<void>(resolve =>{
+  //   //     const numToResolve = arrOfSyncFunctions.length;
+  //   //     let numResolved = 0;
+  //   //     // call after each async function resolves
+  //   //     const resolveOne = () =>{
+  //   //         numResolved++;
+  //   //         if(numResolved >= numToResolve){
+  //   //             // all functions have resolved. Resolve finally
+  //   //             resolve();
+  //   //         }
+  //   //     };
+  //   //     // call all sync functions in parallel
+  //   //     for(let i = 0; i < numToResolve; i++){
+  //   //         (async ()=>{
+  //   //             await arrOfSyncFunctions[i]();
+  //   //             resolveOne();
+  //   //         })
+  //   //     }
+  //   // });
+  // }
 }
